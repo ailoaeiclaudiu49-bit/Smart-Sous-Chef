@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <script>
+      window['ai_edge_gallery_get_result'] = async (data) => {
+        try {
+          // Clean the data in case the AI added markdown ticks
+          let cleanData = data || "{}";
+          if (cleanData.startsWith("```json")) {
+            cleanData = cleanData.replace(/```json/g, '').replace(/```/g, '').trim();
+          }
+
+          const encodedData = encodeURIComponent(cleanData);
+          
+          return JSON.stringify({
+            result: "Recipe loaded successfully. Enjoy cooking!",
+            webview: {
+              url: `../assets/widget.html?data=${encodedData}`
+            }
+          });
+        } catch (e) {
+          return JSON.stringify({error: "Bridge failed: " + e.message});
+        }
+      };
+    </script>
+  </body>
+</html>
