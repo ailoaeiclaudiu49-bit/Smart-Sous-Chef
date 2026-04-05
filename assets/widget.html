@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      background-color: #f4f4f9; color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 20px; margin: 0;
+    }
+    .recipe-card {
+      background: white; border-radius: 16px; padding: 25px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      max-width: 400px; margin: 0 auto;
+    }
+    h1 { color: #ff6b6b; margin-top: 0; font-size: 24px; line-height: 1.2; }
+    h2 { font-size: 18px; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-top: 25px; color: #555; }
+    
+    .ingredient-item { display: flex; align-items: center; margin-bottom: 12px; }
+    .ingredient-item input[type="checkbox"] { 
+      margin-right: 12px; width: 20px; height: 20px; accent-color: #ff6b6b; 
+    }
+    .ingredient-item label { font-size: 16px; transition: color 0.2s; }
+    .ingredient-item input[type="checkbox"]:checked + label {
+      text-decoration: line-through; color: #aaa;
+    }
+    
+    .step-item { margin-bottom: 20px; font-size: 16px; line-height: 1.5; }
+    
+    .timer-btn {
+      background-color: #4ecdc4; color: white; border: none;
+      border-radius: 8px; padding: 10px 15px; margin-top: 8px;
+      cursor: pointer; font-weight: bold; font-size: 14px;
+      display: inline-flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 6px rgba(78, 205, 196, 0.3); transition: all 0.2s;
+    }
+    .timer-btn:active { transform: translateY(2px); box-shadow: none; }
+    .timer-btn.running { background-color: #ffb86c; box-shadow: 0 4px 6px rgba(255, 184, 108, 0.3); }
+    .timer-btn.done { background-color: #ff6b6b; animation: pulse 1s infinite; }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="recipe-card">
+    <h1 id="recipe-name">Generating Recipe...</h1>
+    
+    <h2>Ingredients</h2>
+    <div id="ingredients-list"></div>
+    
+    <h2>Instructions</h2>
+    <div id="steps-list"></div>
+  </div>
+
+  <script>
+    // State management for multiple timers
+    const timers = {};
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    // Handles starting, canceling, and alerting the timer
+    function startTimer(btnId, durationSeconds) {
+      const btn = document.getElementById(btnId);
+      
+      // If it's already running, cancel it
+      if (timers[btnId]) {
+        clearInterval(timers[btnId].interval);
+        delete timers[btnId];
+        btn.className = 'timer-btn';
+        btn.innerText = `⏱️ Start Timer (${formatTime(durationSeconds)})`;
+        return;
+      }
+
+      // Start a new countdown
+      let remaining = durationSeconds;
+      btn.className = 'timer-btn running';
+      btn.innerText = `⏹️ Cancel (${formatTime(remaining)})`;
+
+      timers[btnId] = {
+        interval: setInterval(() => {
+          remaining--;
+          if (remaining <= 0) {
+            clearInterval(timers[btnId].interval);
+            delete timers[btnId];
+            btn.className = 'timer-btn done';
+            btn.innerText = `🔔 Time's Up!`;
+            // Trigger phone vibration if the OS allows it inside the webview
+            try { if(navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]); } catch(e){}
+          } else {
+            btn.innerText = `⏹️ Cancel (${formatTime(remaining)})`;
+          }
+        }, 1000)
+      };
+    }
+
+    // Unpack AI data and draw the UI
+    const params = new URLSearchParams(window.location.search);
+    try {
+      if (params.has('data')) {
+        const parsed = JSON.parse(decodeURIComponent(params.get('data')));
+        
+        if (parsed.recipe_name) document.getElementById('recipe-name').innerText = parsed.recipe_name;
+
+        // Render Ingredients with Checkboxes
+        const ingContainer = document.getElementById('ingredients-list');
+        if (parsed.ingredients) {
+          parsed.ingredients.forEach((ing, index) => {
+            const div = document.createElement('div');
+            div.className = 'ingredient-item';
+            div.innerHTML = `
+              <input type="checkbox" id="ing-${index}">
+              <label for="ing-${index}">${ing}</label>
+            `;
+            ingContainer.appendChild(div);
+          });
+        }
+
+        // Render Steps and Timers
+        const stepsContainer = document.getElementById('steps-list');
+        if (parsed.steps) {
+          parsed.steps.forEach((step, index) => {
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'step-item';
+            
+            let html = `<strong>Step ${index + 1}:</strong> ${step.instruction}`;
+            
+            // Only add a button if the AI gave us a timer length greater than 0!
+            if (step.timer_seconds && step.timer_seconds > 0) {
+              const btnId = `timer-${index}`;
+              html += `<br><button id="${btnId}" class="timer-btn" onclick="startTimer('${btnId}', ${step.timer_seconds})">⏱️ Start Timer (${formatTime(step.timer_seconds)})</button>`;
+            }
+            
+            stepDiv.innerHTML = html;
+            stepsContainer.appendChild(stepDiv);
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      document.getElementById('recipe-name').innerText = "Chef encountered an error.";
+    }
+  </script>
+</body>
+</html>
